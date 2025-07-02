@@ -1,4 +1,4 @@
-# FINAL BRAIN SCRIPT - FULLY CALIBRATED
+# FINAL BRAIN SCRIPT v2.0 - WITH PRE-PROCESSING
 from flask import Flask, request, jsonify
 import cv2
 import numpy as np
@@ -7,19 +7,23 @@ from itertools import permutations
 import re
 
 # --- FINAL CALIBRATION VALUES ---
-# FROM YOUR INPUT
 WHEEL_CROP = [1004, 1456, 132, 584]  # y1, y2, x1, x2
 GRID_CROP = [131, 930, 0, 711]      # y1, y2, x1, x2
 
 app = Flask(__name__)
 
-# LOAD DICTIONARY
 with open('/usr/share/dict/words', 'r') as f:
     dictionary = set(word.strip().upper() for word in f)
 
 @app.route('/')
 def health_check():
-    return "brain online", 200
+    return "brain online v2.0", 200
+
+def preprocess_for_ocr(image):
+    # CONVERT TO GRAYSCALE AND APPLY A THRESHOLD TO MAKE IT PURE B&W
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+    return thresh
 
 def solve_puzzle(image_bytes):
     nparr = np.frombuffer(image_bytes, np.uint8)
@@ -28,8 +32,11 @@ def solve_puzzle(image_bytes):
     # 1. GET LETTERS FROM WHEEL
     y1, y2, x1, x2 = WHEEL_CROP
     wheel_img = img[y1:y2, x1:x2]
-    ocr_data = pytesseract.image_to_data(wheel_img, config='--psm 6', output_type=pytesseract.Output.DICT)
-    available_letters = []
+    # NEW PRE-PROCESSING FOR WHEEL
+    processed_wheel = preprocess_for_ocr(wheel_img)
+    # NEW TESSERACT CONFIG - Hunt for single characters
+    ocr_data = pytesseract.image_to_data(processed_wheel, config='--psm 10', output_type=pytesseract.Output.DICT)
+    
     letter_coords = {}
     for i in range(len(ocr_data['text'])):
         letter = ocr_data['text'][i].upper()
@@ -42,7 +49,9 @@ def solve_puzzle(image_bytes):
     # 2. GET EXISTING WORDS FROM GRID
     y1, y2, x1, x2 = GRID_CROP
     grid_img = img[y1:y2, x1:x2]
-    found_words_text = pytesseract.image_to_string(grid_img)
+    # NEW PRE-PROCESSING FOR GRID
+    processed_grid = cv2.cvtColor(grid_img, cv2.COLOR_BGR2GRAY) # Simple grayscale is enough for the grid
+    found_words_text = pytesseract.image_to_string(processed_grid)
     existing_words = set(re.findall(r'\b[A-Z]{3,}\b', found_words_text.upper()))
 
     # 3. FIND NEW WORDS
@@ -53,7 +62,7 @@ def solve_puzzle(image_bytes):
             if word in dictionary:
                 all_possible_words.add(word)
     new_words = list(all_possible_words - existing_words)
-    new_words.sort(key=len, reverse=True) # SOLVE LONGEST WORDS FIRST
+    new_words.sort(key=len, reverse=True)
 
     swipes = []
     for word in new_words:
