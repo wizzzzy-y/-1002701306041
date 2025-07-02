@@ -4,9 +4,11 @@ FROM python:3.9-slim
 # Set the working directory
 WORKDIR /app
 
-# Install the necessary system-level packages for tesseract and opencv
+# Install the necessary system-level packages
+# ADDED 'wamerican' TO THIS LIST
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
+    wamerican \
     libgl1-mesa-glx \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
