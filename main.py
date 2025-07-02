@@ -7,8 +7,8 @@ from itertools import permutations
 import re
 
 # CONFIG - YOU WILL NEED TO TWEAK THESE CROP VALUES FOR YOUR PHONE'S RESOLUTION
-WHEEL_CROP = [1400, 1800, 200, 900]  # y1, y2, x1, x2
-GRID_CROP = [150, 800, 100, 1000]    # y1, y2, x1, x2
+WHEEL_CROP = [940, 1586, 68, 619]  # y1, y2, x1, x2
+GRID_CROP = [132, 987, 20, 710]    # y1, y2, x1, x2
 
 app = Flask(__name__)
 
