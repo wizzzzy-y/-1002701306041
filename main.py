@@ -1,4 +1,4 @@
-# FINAL BRAIN SCRIPT v2.0 - WITH PRE-PROCESSING
+# FINAL BRAIN SCRIPT v3.0 - ROBUST EDITION
 from flask import Flask, request, jsonify
 import cv2
 import numpy as np
@@ -17,10 +17,9 @@ with open('/usr/share/dict/words', 'r') as f:
 
 @app.route('/')
 def health_check():
-    return "brain online v2.0", 200
+    return "brain online v3.0 robust", 200
 
 def preprocess_for_ocr(image):
-    # CONVERT TO GRAYSCALE AND APPLY A THRESHOLD TO MAKE IT PURE B&W
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
     return thresh
@@ -29,12 +28,18 @@ def solve_puzzle(image_bytes):
     nparr = np.frombuffer(image_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-    # 1. GET LETTERS FROM WHEEL
+    # --- SANITY CHECK FOR IMAGE SIZE ---
+    if img is None:
+        return "err: Invalid image data"
+
+    # --- DEFENSIVE CROPPING ---
     y1, y2, x1, x2 = WHEEL_CROP
+    if y2 > img.shape[0] or x2 > img.shape[1]:
+        return f"err: WHEEL_CROP [{y1},{y2},{x1},{x2}] is outside image bounds [{img.shape[0]},{img.shape[1]}]"
     wheel_img = img[y1:y2, x1:x2]
-    # NEW PRE-PROCESSING FOR WHEEL
+
+    # THE ERROR HAPPENED HERE, NOW IT'S PROTECTED
     processed_wheel = preprocess_for_ocr(wheel_img)
-    # NEW TESSERACT CONFIG - Hunt for single characters
     ocr_data = pytesseract.image_to_data(processed_wheel, config='--psm 10', output_type=pytesseract.Output.DICT)
     
     letter_coords = {}
@@ -46,15 +51,16 @@ def solve_puzzle(image_bytes):
             letter_coords[letter] = (abs_x, abs_y)
     available_letters = list(letter_coords.keys())
 
-    # 2. GET EXISTING WORDS FROM GRID
-    y1, y2, x1, x2 = GRID_CROP
-    grid_img = img[y1:y2, x1:x2]
-    # NEW PRE-PROCESSING FOR GRID
-    processed_grid = cv2.cvtColor(grid_img, cv2.COLOR_BGR2GRAY) # Simple grayscale is enough for the grid
+    # --- SAME DEFENSE FOR GRID ---
+    y1_g, y2_g, x1_g, x2_g = GRID_CROP
+    if y2_g > img.shape[0] or x2_g > img.shape[1]:
+        return f"err: GRID_CROP is outside image bounds"
+    grid_img = img[y1_g:y2_g, x1_g:x2_g]
+    
+    processed_grid = cv2.cvtColor(grid_img, cv2.COLOR_BGR2GRAY)
     found_words_text = pytesseract.image_to_string(processed_grid)
     existing_words = set(re.findall(r'\b[A-Z]{3,}\b', found_words_text.upper()))
 
-    # 3. FIND NEW WORDS
     all_possible_words = set()
     for i in range(3, len(available_letters) + 1):
         for p in permutations(available_letters, i):
@@ -81,8 +87,14 @@ def process_image():
         return jsonify({"error": "No screenshot file"}), 400
     image_file = request.files['screenshot']
     image_bytes = image_file.read()
-    swipe_paths = solve_puzzle(image_bytes)
-    return jsonify({"swipes": swipe_paths})
+    
+    result = solve_puzzle(image_bytes)
+    
+    # RETURN AN ERROR INSTEAD OF CRASHING
+    if isinstance(result, str) and result.startswith("err:"):
+        return jsonify({"error": result}), 500
+
+    return jsonify({"swipes": result})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
