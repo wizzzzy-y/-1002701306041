@@ -1,4 +1,4 @@
-# FINAL BRAIN SCRIPT v3.0 - ROBUST EDITION
+# F1N4L BR41N SCR1PT v5.0 - SN1P3R L0G1C
 from flask import Flask, request, jsonify
 import cv2
 import numpy as np
@@ -6,80 +6,50 @@ import pytesseract
 from itertools import permutations
 import re
 
-# --- FINAL CALIBRATION VALUES ---
-WHEEL_CROP = [1004, 1456, 132, 584]  # y1, y2, x1, x2
-GRID_CROP = [131, 930, 0, 711]      # y1, y2, x1, x2
+WHEEL_CROP = [1004, 1456, 132, 584]
+GRID_CROP = [131, 930, 0, 711]
 
 app = Flask(__name__)
-
 with open('/usr/share/dict/words', 'r') as f:
     dictionary = set(word.strip().upper() for word in f)
-
-@app.route('/')
-def health_check():
-    return "brain online v3.0 robust", 200
 
 def preprocess_for_ocr(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
     return thresh
 
-def solve_puzzle(image_bytes):
+def solve_for_one_best_word(image_bytes):
     nparr = np.frombuffer(image_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-    # --- SANITY CHECK FOR IMAGE SIZE ---
-    if img is None:
-        return "err: Invalid image data"
-
-    # --- DEFENSIVE CROPPING ---
-    y1, y2, x1, x2 = WHEEL_CROP
-    if y2 > img.shape[0] or x2 > img.shape[1]:
-        return f"err: WHEEL_CROP [{y1},{y2},{x1},{x2}] is outside image bounds [{img.shape[0]},{img.shape[1]}]"
-    wheel_img = img[y1:y2, x1:x2]
-
-    # THE ERROR HAPPENED HERE, NOW IT'S PROTECTED
+    # ... [Same OCR logic as before to get letter_coords and existing_words] ...
+    y1w, y2w, x1w, x2w = WHEEL_CROP
+    wheel_img = img[y1w:y2w, x1w:x2w]
     processed_wheel = preprocess_for_ocr(wheel_img)
     ocr_data = pytesseract.image_to_data(processed_wheel, config='--psm 10', output_type=pytesseract.Output.DICT)
-    
     letter_coords = {}
     for i in range(len(ocr_data['text'])):
         letter = ocr_data['text'][i].upper()
         if re.match("^[A-Z]$", letter) and letter not in letter_coords:
-            abs_x = x1 + ocr_data['left'][i] + ocr_data['width'][i] // 2
-            abs_y = y1 + ocr_data['top'][i] + ocr_data['height'][i] // 2
-            letter_coords[letter] = (abs_x, abs_y)
-    available_letters = list(letter_coords.keys())
-
-    # --- SAME DEFENSE FOR GRID ---
-    y1_g, y2_g, x1_g, x2_g = GRID_CROP
-    if y2_g > img.shape[0] or x2_g > img.shape[1]:
-        return f"err: GRID_CROP is outside image bounds"
-    grid_img = img[y1_g:y2_g, x1_g:x2_g]
+            letter_coords[letter] = (x1w + ocr_data['left'][i] + ocr_data['width'][i] // 2, y1w + ocr_data['top'][i] + ocr_data['height'][i] // 2)
     
+    y1g, y2g, x1g, x2g = GRID_CROP
+    grid_img = img[y1g:y2g, x1g:x2g]
     processed_grid = cv2.cvtColor(grid_img, cv2.COLOR_BGR2GRAY)
-    found_words_text = pytesseract.image_to_string(processed_grid)
-    existing_words = set(re.findall(r'\b[A-Z]{3,}\b', found_words_text.upper()))
+    existing_words = set(re.findall(r'\b[A-Z]{3,}\b', pytesseract.image_to_string(processed_grid).upper()))
 
-    all_possible_words = set()
-    for i in range(3, len(available_letters) + 1):
-        for p in permutations(available_letters, i):
+    # --- SN1P3R L0G1C H3R3 ---
+    # F1ND TH3 L0NG3ST P0SS1BL3 N3W W0RD 4ND 3X1T
+    available_letters = list(letter_coords.keys())
+    for length in range(len(available_letters), 2, -1):
+        for p in permutations(available_letters, length):
             word = "".join(p)
-            if word in dictionary:
-                all_possible_words.add(word)
-    new_words = list(all_possible_words - existing_words)
-    new_words.sort(key=len, reverse=True)
+            if word in dictionary and word not in existing_words:
+                # F0UND 0N3. G3T TH3 P4TH 4ND R3TURN 1MM3D14T3LY.
+                path = [letter_coords[l] for l in word]
+                return [path] # Return as a list containing one path
 
-    swipes = []
-    for word in new_words:
-        path = []
-        for letter in word:
-            if letter in letter_coords:
-                path.append(letter_coords[letter])
-        if len(path) == len(word):
-            swipes.append(path)
-
-    return swipes
+    return [] # F0und n0th1ng n3w
 
 @app.route('/solve', methods=['POST'])
 def process_image():
@@ -87,14 +57,8 @@ def process_image():
         return jsonify({"error": "No screenshot file"}), 400
     image_file = request.files['screenshot']
     image_bytes = image_file.read()
-    
-    result = solve_puzzle(image_bytes)
-    
-    # RETURN AN ERROR INSTEAD OF CRASHING
-    if isinstance(result, str) and result.startswith("err:"):
-        return jsonify({"error": result}), 500
-
-    return jsonify({"swipes": result})
+    swipe_paths = solve_for_one_best_word(image_bytes)
+    return jsonify({"swipes": swipe_paths})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
