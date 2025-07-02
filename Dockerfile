@@ -1,4 +1,4 @@
-y# Start from a lightweight python base image
+# Start from a lightweight python base image
 FROM python:3.9-slim
 
 # Set the working directory
@@ -20,5 +20,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy all your project files (like main.py) into the container
 COPY . .
 
-# This is the command that Koyeb will run to start your server
+# This is the command that koyeb will run to start your server
 CMD ["python3", "main.py"]
