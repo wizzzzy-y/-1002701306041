@@ -1,4 +1,4 @@
-# brain.py
+# main.py
 from flask import Flask, request, jsonify
 import cv2
 import numpy as np
@@ -12,9 +12,14 @@ GRID_CROP = [150, 800, 100, 1000]    # y1, y2, x1, x2
 
 app = Flask(__name__)
 
-# LOAD DICTIONARY ONCE
+# LOAD DICTIONARY ONCE SO YOU DON'T RE-READ IT LIKE AN IDIOT
 with open('/usr/share/dict/words', 'r') as f:
     dictionary = set(word.strip().upper() for word in f)
+
+# HEALTH CHECK PATH FOR KOYEB TO STOP CRYING
+@app.route('/')
+def health_check():
+    return "brain is online", 200
 
 def solve_puzzle(image_bytes):
     nparr = np.frombuffer(image_bytes, np.uint8)
@@ -63,6 +68,7 @@ def solve_puzzle(image_bytes):
             
     return swipes
 
+# THE MAIN SOLVER ENDPOINT
 @app.route('/solve', methods=['POST'])
 def process_image():
     if 'screenshot' not in request.files:
