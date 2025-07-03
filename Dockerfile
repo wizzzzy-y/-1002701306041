@@ -1,8 +1,12 @@
 # STAGE 1: THE FORGE (COMPILER)
 FROM rust:1-slim as builder
 
-# INSTALL C++ DEPENDENCIES WITH RETRY LOGIC
+# INSTALL C++ DEPENDENCIES
 RUN apt-get update && apt-get install -y -o Acquire::Retries=3 build-essential pkg-config libtesseract-dev libleptonica-dev libopencv-dev clang
+
+# --- THE FIX IS HERE ---
+# TELL THE BUILDER WHERE TO FIND ITS TOOLS
+ENV LIBCLANG_PATH=/usr/lib/llvm-11/lib
 
 WORKDIR /usr/src/app
 
@@ -17,7 +21,7 @@ RUN cargo build --release
 # STAGE 2: THE WAR MACHINE (RUNTIME)
 FROM debian:bullseye-slim
 
-# INSTALL RUNTIME DEPENDENCIES WITH RETRY LOGIC
+# INSTALL RUNTIME DEPENDENCIES
 RUN apt-get update && apt-get install -y -o Acquire::Retries=3 tesseract-ocr wamerican libopencv-core4.5 libopencv-imgproc4.5 libopencv-imgcodecs4.5 && rm -rf /var/lib/apt/lists/*
 
 # Copy the binary from the forge
