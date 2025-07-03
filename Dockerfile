@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y build-essential pkg-config libtesseract
 WORKDIR /usr/src/app
 
 # Copy the dependency list first to cache the layer
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml ./
 # Build ONLY the dependencies. This will be fast on future builds if only code changes.
 RUN mkdir src/ && echo "fn main() {}" > src/main.rs && cargo build --release
 
